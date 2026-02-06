@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       Int           @id @default(autoincrement())
+  username String        @unique
+  password String
+  email    String        @unique
+  role     Role          @default(client)
+  settings UserSetting[]
+
+  @@map("users")
+}
+
+model UserSetting {
+  id     Int             @id @default(autoincrement())
+  user   User            @relation(fields: [userId], references: [id])
+  userId Int             @map("user_id")
+  name   UserSettingName
+  value  String          @db.VarChar(512)
+
+  @@unique([userId, name])
+  @@map("user-settings")
+}
+
+enum Role {
+  client
+  admin
+}
+
+enum UserSettingName {
+  inputFolderId
+  outputFolderId
+}
+
+enum DocumentProcessingStep {
+  DOWNLOADING
+  OCR
+  AI_EXTRACTION
+  SAVING_RESULTS
+}
+
+/// Status of document processing in our system
+enum DocumentStatus {
+  PENDING      /// We know about the file but processing has not started yet
+  IN_PROGRESS  /// File is currently being processed (OCR + AI)
+  PROCESSED    /// File was processed successfully and data is stored
+  FAILED       /// Processing failed (see errorMessage)
+}
+
+/// One record per file uploaded to SharePoint and processed by our pipeline
+model Document {
+  id           String         @id @default(uuid())
+
+  /// SharePoint identifiers to uniquely match this record to a file
+  sharepointDriveId String
+  sharepointItemId  String         @unique
+  sharepointSiteId  String?        /// Optional: SharePoint site identifier
+  sharepointWebUrl  String?        /// Web URL to the file in SharePoint UI
+
+  /// Basic file info
+  fileName      String
+  fileSize      Int?               /// File size in bytes (from SharePoint)
+  contentType   String?            /// MIME type, e.g. application/pdf
+
+  /// Logical document type (selected by client or detected by AI)
+  documentType  String?            /// You can later replace this with an enum
+
+  currentStep   DocumentProcessingStep?
+
+  ocrJobId      String?
+
+  /// Processing status (mirrors the status column in SharePoint)
+  status        DocumentStatus     @default(PENDING)
+
+  /// Structured data extracted from the document (OpenAI result)
+  data          Json?
+
+  /// Full OCR text extracted from images (optional but useful for debugging)
+  rawText       String?
+
+  /// Error message if processing failed
+  errorMessage  String?
+
+  searchableDriveId String?   // ID библиотеки (drive) для временных файлов
+  searchableItemId  String?   // ID файла внутри этой библиотеки
+
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  processedAt   DateTime?          /// When processing was successfully completed
+
+  @@index([status])
+  @@index([sharepointDriveId, sharepointItemId])
+
+  @@map("documents")
+}

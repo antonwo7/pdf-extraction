@@ -1,0 +1,16 @@
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator'
+
+export class LoginDto {
+	@IsEmail()
+	email: string
+
+	@MinLength(6, {
+		message: 'Password must be at least 6 chars long'
+	})
+	@IsString()
+	password: string
+
+	@IsString()
+	@IsOptional()
+	code: string
+}
